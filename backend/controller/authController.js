@@ -1,5 +1,6 @@
 import { User } from "../models/userModel.js";
 import bcryptjs from "bcryptjs";
+import { generateTokenAndSetCookie } from "../utils/generateToken.js";
 
 // Signup LOGIC
 export const signup = async (req, res) => {
@@ -57,6 +58,8 @@ export const signup = async (req, res) => {
       username,
       image,
     });
+
+    generateTokenAndSetCookie(newUser._id, res);
     await newUser.save(); //saving the new user to the database
     // remove password from the response
     res.status(201).json({
@@ -77,10 +80,51 @@ export const signup = async (req, res) => {
 
 // Login LOGIC
 export const login = async (req, res) => {
-  res.send("Login Route");
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
+    }
+    // Check if user exists
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid Credentials" });
+    }
+    // Check if password matches
+    const isMatch = await bcryptjs.compare(password, user.password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid Credentials" });
+    }
+
+    generateTokenAndSetCookie(user._id, res);
+
+    res.json({
+      success: true,
+      user: {
+        ...user._doc,
+        password: "",
+      },
+    });
+  } catch (error) {
+    console.log("Error in Login Controller", error.message);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
 };
 
 // Logout LOGIC
 export const logout = async (req, res) => {
-  res.send("Logout Route");
+  try {
+    res.clearCookie("jwt-netflix");
+    res.status(200).json({ success: true, message: "Logged out successfully" });
+  } catch (error) {
+    console.log("Error in the logout controller", error.message);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
 };
